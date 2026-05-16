@@ -1,14 +1,14 @@
 import express from "express";
 import cors from "cors";
-import { workflows, matchWorkflow, getWorkflow } from "../shared/kb/workflows";
-import { rules, getRule } from "../shared/kb/rules";
+import { workflows, matchWorkflow, getWorkflow } from "../shared/kb/workflows.js";
+import { rules, getRule } from "../shared/kb/rules.js";
 import type {
   AskRequest,
   AskResponse,
   AppId,
   ErrorReport,
   SessionState,
-} from "../shared/types";
+} from "../shared/types.js";
 
 /**
  * Hub Express app.

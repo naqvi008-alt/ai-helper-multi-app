@@ -1,4 +1,4 @@
-import type { BusinessRule } from "../types";
+import type { BusinessRule } from "../types.js";
 
 /**
  * 35 business rules spanning all 4 apps in the loan onboarding process.

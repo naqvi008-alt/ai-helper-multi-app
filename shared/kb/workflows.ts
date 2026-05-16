@@ -1,4 +1,4 @@
-import type { Workflow } from "../types";
+import type { Workflow } from "../types.js";
 
 /**
  * App URLs.
