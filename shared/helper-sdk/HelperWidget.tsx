@@ -1,5 +1,13 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
+import {
+  advanceSession,
+  backSession,
+  endSession,
+  readSession,
+  startSession,
+  subscribeToSession,
+} from "./session";
 import type {
   AppId,
   AskResponse,
@@ -53,7 +61,9 @@ export default function HelperWidget({ appId, appName }: Props) {
   ]);
   const [input, setInput] = useState("");
 
-  const [session, setSession] = useState<SessionState | null>(null);
+  // Session state lives in localStorage; we mirror it in component state and
+  // re-render whenever localStorage changes (this tab OR a sibling tab).
+  const [session, setSession] = useState<SessionState | null>(() => readSession());
   const [activeWorkflow, setActiveWorkflow] = useState<Workflow | null>(null);
 
   const [errorBadge, setErrorBadge] = useState<{
@@ -72,37 +82,34 @@ export default function HelperWidget({ appId, appName }: Props) {
     bodyRef.current?.scrollTo({ top: bodyRef.current.scrollHeight, behavior: "smooth" });
   }, [messages.length]);
 
-  // Poll the hub for the current session so cross-app handoffs show up automatically
+  // Subscribe to session changes — both this tab's writes and cross-tab events.
+  useEffect(() => subscribeToSession(setSession), []);
+
+  // When the active workflow id changes, fetch its definition from the hub.
   useEffect(() => {
-    let cancelled = false;
-    async function poll() {
-      try {
-        const s = await api.getSession();
-        if (cancelled) return;
-        setSession(s);
-        if (s) {
-          const wf = await api.getWorkflow(s.workflowId);
-          if (!cancelled) setActiveWorkflow(wf);
-        } else {
-          setActiveWorkflow(null);
-        }
-      } catch {
-        /* hub probably down — ignore */
-      }
+    if (!session) {
+      setActiveWorkflow(null);
+      return;
     }
-    poll();
-    const id = window.setInterval(poll, 1200);
+    let cancelled = false;
+    api
+      .getWorkflow(session.workflowId)
+      .then((wf) => {
+        if (!cancelled) setActiveWorkflow(wf);
+      })
+      .catch(() => {
+        // Hub unreachable: leave activeWorkflow null. Helper will look idle
+        // until the hub recovers or the user starts a new flow.
+      });
     return () => {
       cancelled = true;
-      window.clearInterval(id);
     };
-  }, []);
+  }, [session?.workflowId]);
 
-  // Listen for error events from the host app
+  // Listen for error events fired by the host app
   useEffect(() => {
     function onError(e: CustomEvent<ErrorReport>) {
       setErrorBadge({ err: e.detail, rect: null });
-      api.reportError(e.detail).catch(() => {});
     }
     function onClear() {
       setErrorBadge(null);
@@ -175,9 +182,8 @@ export default function HelperWidget({ appId, appName }: Props) {
   async function startWorkflow(workflowId: string) {
     const wf = await api.getWorkflow(workflowId);
     setActiveWorkflow(wf);
-    const s = await api.startSession(workflowId);
-    setSession(s);
-    setOpen(true);
+    startSession(wf); // writes to localStorage; subscription updates `session`
+    setOpen(false);
     setErrorBadge(null);
   }
 
@@ -192,7 +198,7 @@ export default function HelperWidget({ appId, appName }: Props) {
     } catch {
       setMessages((m) => [
         ...m,
-        { kind: "bot", text: "Helper hub is unreachable. Make sure the hub is running on :4000." },
+        { kind: "bot", text: "Helper hub is unreachable. Try again in a moment." },
       ]);
       return;
     }
@@ -203,37 +209,28 @@ export default function HelperWidget({ appId, appName }: Props) {
     ]);
   }
 
-  async function advance() {
-    const next = await api.advance();
-    if ("completed" in next && next.completed) {
-      setSession(null);
-      setActiveWorkflow(null);
-      setMessages((m) => [
-        ...m,
-        { kind: "bot", text: "Workflow complete. Nice work." },
-      ]);
-    } else {
-      setSession(next as SessionState);
+  function advance() {
+    if (!activeWorkflow) return;
+    const result = advanceSession(activeWorkflow);
+    if (result.completed) {
+      setMessages((m) => [...m, { kind: "bot", text: "Workflow complete. Nice work." }]);
     }
   }
 
-  async function back() {
-    const s = await api.back();
-    setSession(s);
+  function back() {
+    if (!activeWorkflow) return;
+    backSession(activeWorkflow);
   }
 
-  async function endSession() {
-    await api.end();
-    setSession(null);
-    setActiveWorkflow(null);
+  function end() {
+    endSession();
   }
 
   const fabBadge = useMemo(() => {
     if (errorBadge) return "!";
-    if (session && activeWorkflow && session.currentApp === appId) return null;
-    if (session) return "→";
+    if (session && session.currentApp !== appId) return "→";
     return null;
-  }, [errorBadge, session, activeWorkflow, appId]);
+  }, [errorBadge, session, appId]);
 
   const currentStep =
     session && activeWorkflow ? activeWorkflow.steps[session.stepIndex] : null;
@@ -336,7 +333,7 @@ export default function HelperWidget({ appId, appName }: Props) {
                 )}
 
                 <div className="helper-step-actions">
-                  <button className="btn btn-ghost" onClick={endSession}>
+                  <button className="btn btn-ghost" onClick={end}>
                     Exit
                   </button>
                   <div className="spacer" />
