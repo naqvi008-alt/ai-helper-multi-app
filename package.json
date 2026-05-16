@@ -1,0 +1,38 @@
+{
+  "name": "multi-app-prototype",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "hub": "tsx hub/server.ts",
+    "member": "vite --config apps/member-portal/vite.config.ts",
+    "intake": "vite --config apps/intake-app/vite.config.ts",
+    "risk": "vite --config apps/risk-app/vite.config.ts",
+    "fulfillment": "vite --config apps/fulfillment-app/vite.config.ts",
+    "dev": "concurrently -n HUB,MEMBER,INTAKE,RISK,FULFIL -c blue,green,yellow,magenta,cyan \"npm:hub\" \"npm:member\" \"npm:intake\" \"npm:risk\" \"npm:fulfillment\"",
+    "clean": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\"",
+    "build:intake": "vite build --config apps/intake-app/vite.config.ts --base=/intake/ --outDir ../../dist/intake",
+    "build:risk": "vite build --config apps/risk-app/vite.config.ts --base=/risk/ --outDir ../../dist/risk",
+    "build:fulfillment": "vite build --config apps/fulfillment-app/vite.config.ts --base=/fulfillment/ --outDir ../../dist/fulfillment",
+    "build:member": "vite build --config apps/member-portal/vite.config.ts --base=/ --outDir ../../dist",
+    "build": "npm run clean && npm run build:intake && npm run build:risk && npm run build:fulfillment && npm run build:member"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "express": "^4.21.1",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^5.0.0",
+    "@types/node": "^22.9.0",
+    "@types/react": "^18.3.12",
+    "@types/react-dom": "^18.3.1",
+    "@vitejs/plugin-react": "^4.3.4",
+    "concurrently": "^9.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.10"
+  }
+}
