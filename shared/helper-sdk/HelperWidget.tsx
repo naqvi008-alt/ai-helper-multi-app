@@ -149,8 +149,10 @@ export default function HelperWidget({ appId, appName }: Props) {
     const wf = await api.getWorkflow(workflowId);
     setActiveWorkflow(wf);
     startSession(wf); // writes to localStorage; subscription updates `session`
-    setOpen(false);
     setErrorBadge(null);
+    setOpen(true); // keep / bring the panel open so the new step card is visible
+    // Auto-scroll the chat body to the top so the user immediately sees the new step
+    requestAnimationFrame(() => bodyRef.current?.scrollTo({ top: 0 }));
   }
 
   async function send(text: string) {
@@ -246,6 +248,35 @@ export default function HelperWidget({ appId, appName }: Props) {
           </div>
 
           <div className="helper-body" ref={bodyRef}>
+            {/* Inline "new error detected" banner — surfaces the recovery option
+                inside the panel even when the floating badge is obscured
+                (e.g. anchored to a field behind the panel). */}
+            {errorBadge && (
+              <div className="helper-error-banner">
+                <div className="helper-error-banner-row">
+                  <span className="helper-error-banner-icon">!</span>
+                  <div className="helper-error-banner-text">
+                    <strong>Issue detected</strong>
+                    <div>{errorBadge.err.message}</div>
+                  </div>
+                </div>
+                <div className="helper-error-banner-actions">
+                  <button
+                    className="btn btn-ghost"
+                    onClick={() => setErrorBadge(null)}
+                  >
+                    Dismiss
+                  </button>
+                  <button
+                    className="btn btn-primary"
+                    onClick={() => startWorkflow(errorBadge.err.suggestedWorkflowId)}
+                  >
+                    {session ? "Switch to recovery →" : "Fix this →"}
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* Active step card */}
             {session && activeWorkflow && currentStep && (
               <div className="helper-step">
