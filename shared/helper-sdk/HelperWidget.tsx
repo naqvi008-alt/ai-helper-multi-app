@@ -8,6 +8,7 @@ import {
   startSession,
   subscribeToSession,
 } from "./session";
+import StepPreview from "./StepPreview";
 import type {
   AppId,
   AskResponse,
@@ -70,10 +71,6 @@ export default function HelperWidget({ appId, appName }: Props) {
     err: ErrorReport;
     rect: { top: number; left: number; width: number; height: number } | null;
   } | null>(null);
-
-  const [highlightRect, setHighlightRect] = useState<
-    { top: number; left: number; width: number; height: number } | null
-  >(null);
 
   const bodyRef = useRef<HTMLDivElement>(null);
 
@@ -148,37 +145,6 @@ export default function HelperWidget({ appId, appName }: Props) {
     };
   }, [errorBadge?.err.anchorSelector]);
 
-  // Highlight the target element when a step is active in THIS app and has a selector
-  useLayoutEffect(() => {
-    if (!session || !activeWorkflow) {
-      setHighlightRect(null);
-      return;
-    }
-    const step = activeWorkflow.steps[session.stepIndex];
-    if (!step || step.appId !== appId || !step.selector) {
-      setHighlightRect(null);
-      return;
-    }
-    function recompute() {
-      const el = document.querySelector(step.selector!) as HTMLElement | null;
-      if (!el) {
-        setHighlightRect(null);
-        return;
-      }
-      const r = el.getBoundingClientRect();
-      setHighlightRect({ top: r.top, left: r.left, width: r.width, height: r.height });
-    }
-    recompute();
-    const id = window.setInterval(recompute, 250);
-    window.addEventListener("resize", recompute);
-    window.addEventListener("scroll", recompute, true);
-    return () => {
-      window.clearInterval(id);
-      window.removeEventListener("resize", recompute);
-      window.removeEventListener("scroll", recompute, true);
-    };
-  }, [session, activeWorkflow, appId]);
-
   async function startWorkflow(workflowId: string) {
     const wf = await api.getWorkflow(workflowId);
     setActiveWorkflow(wf);
@@ -238,19 +204,6 @@ export default function HelperWidget({ appId, appName }: Props) {
 
   return (
     <>
-      {/* Highlight box for the active step's target (only if step belongs to this app) */}
-      {highlightRect && (
-        <div
-          className="tour-highlight"
-          style={{
-            top: highlightRect.top - 4,
-            left: highlightRect.left - 4,
-            width: highlightRect.width + 8,
-            height: highlightRect.height + 8,
-          }}
-        />
-      )}
-
       {/* Error badge anchored near the offending field */}
       {errorBadge && errorBadge.rect && (
         <button
@@ -321,6 +274,10 @@ export default function HelperWidget({ appId, appName }: Props) {
 
                 <h4>{currentStep.title}</h4>
                 <p>{currentStep.instruction}</p>
+
+                {currentStep.preview && (
+                  <StepPreview appId={currentStep.appId} preview={currentStep.preview} />
+                )}
 
                 {currentStep.validates && currentStep.validates.length > 0 && (
                   <div className="meta">
