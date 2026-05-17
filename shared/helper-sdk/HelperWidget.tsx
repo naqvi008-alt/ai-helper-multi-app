@@ -29,6 +29,29 @@ type Props = {
   appName: string;
 };
 
+/**
+ * Panel expand/shrink preference. Persisted in localStorage so it survives
+ * reloads and syncs across same-origin tabs the same way the session does.
+ */
+const PANEL_EXPANDED_KEY = "helper:panel-expanded:v1";
+const PANEL_EXPANDED_EVENT = "helper:panel-expanded-changed";
+
+function readExpanded(): boolean {
+  try {
+    return localStorage.getItem(PANEL_EXPANDED_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+function writeExpanded(v: boolean) {
+  try {
+    localStorage.setItem(PANEL_EXPANDED_KEY, v ? "1" : "0");
+    window.dispatchEvent(new Event(PANEL_EXPANDED_EVENT));
+  } catch {
+    /* ignore */
+  }
+}
+
 const SUGGESTIONS_BY_APP: Record<AppId, string[]> = {
   "member-portal": [
     "How do I apply for a loan?",
@@ -72,7 +95,28 @@ export default function HelperWidget({ appId, appName }: Props) {
     rect: { top: number; left: number; width: number; height: number } | null;
   } | null>(null);
 
+  // Panel size preference (persisted + cross-tab synced).
+  const [expanded, setExpanded] = useState<boolean>(() => readExpanded());
+
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  // Sync the expanded preference across tabs (and from this tab's own writes).
+  useEffect(() => {
+    const refresh = () => setExpanded(readExpanded());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === PANEL_EXPANDED_KEY) refresh();
+    };
+    window.addEventListener(PANEL_EXPANDED_EVENT, refresh);
+    window.addEventListener("storage", onStorage);
+    return () => {
+      window.removeEventListener(PANEL_EXPANDED_EVENT, refresh);
+      window.removeEventListener("storage", onStorage);
+    };
+  }, []);
+
+  function toggleExpanded() {
+    writeExpanded(!expanded);
+  }
 
   // Auto-scroll chat
   useEffect(() => {
@@ -235,13 +279,21 @@ export default function HelperWidget({ appId, appName }: Props) {
       </button>
 
       {open && (
-        <div className="helper-panel" role="dialog">
+        <div className={`helper-panel ${expanded ? "is-expanded" : ""}`} role="dialog">
           <div className="helper-header">
             <div className="helper-avatar">✦</div>
             <div>
               <p className="helper-title">Cross-app Helper</p>
               <p className="helper-sub">{appName} · {appId}</p>
             </div>
+            <button
+              className="helper-expand"
+              onClick={toggleExpanded}
+              aria-label={expanded ? "Shrink" : "Expand"}
+              title={expanded ? "Shrink" : "Expand"}
+            >
+              {expanded ? "⤡" : "⤢"}
+            </button>
             <button className="helper-close" onClick={() => setOpen(false)} aria-label="Close">
               ×
             </button>
